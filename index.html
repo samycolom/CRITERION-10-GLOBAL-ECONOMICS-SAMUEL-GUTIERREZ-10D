@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Decisions Under Uncertainty</title>
+
+<!-- =====================================================================
+     PAGE: DECISIONS UNDER UNCERTAINTY (single file)
+     Structure:
+       1) "style" block  -> design (colors, font, responsive layout)
+       2) "body" block   -> sections: examples, input data, results, filtering, flow diagram
+       3) "script" block -> LOGIC (calculations, never touches the screen) + INTERFACE (draws everything)
+     ===================================================================== -->
+
+<style>
+  /* ---------- Colors and font (variables so they are easy to change) ---------- */
+  :root{
+    --bg:#f2f6fc; --card:#ffffff; --text:#1d2733; --muted:#5d6b7c;
+    --blue:#2b5fd9; --blue-light:#e6eeff; --green:#1f9d68; --green-light:#e3f7ee;
+    --red:#d64545; --red-light:#fdecec; --amber:#e49b0f; --amber-light:#fff4d9;
+    --border:#d5deea; --radius:14px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+       font-family:"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;line-height:1.5}
+  header{background:linear-gradient(135deg,#2b5fd9,#6a4fd8);color:#fff;padding:22px 16px}
+  header .inner{max-width:1100px;margin:auto;display:flex;flex-wrap:wrap;gap:12px;
+                align-items:center;justify-content:space-between}
+  header h1{margin:0;font-size:1.6rem}
+  header p{margin:4px 0 0;opacity:.92}
+  .ai-link{background:#fff;color:var(--blue);font-weight:700;text-decoration:none;
+           padding:10px 18px;border-radius:999px;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+  .ai-link:hover{background:var(--blue-light)}
+  main{max-width:1100px;margin:auto;padding:16px}
+  section{background:var(--card);border-radius:var(--radius);padding:18px;margin-bottom:18px;
+          box-shadow:0 2px 10px rgba(30,50,90,.08)}
+  section h2{margin:0 0 6px;font-size:1.3rem;color:var(--blue)}
+  section h3{margin:16px 0 6px;font-size:1.05rem}
+  .note{color:var(--muted);font-size:.92rem;margin:0 0 10px}
+
+  /* ---------- Buttons ---------- */
+  button{font:inherit;cursor:pointer;border:none;border-radius:10px;padding:8px 14px;
+         background:var(--blue);color:#fff;font-weight:600}
+  button:hover{filter:brightness(1.1)}
+  button.secondary{background:var(--blue-light);color:var(--blue)}
+  button.mini{padding:2px 8px;font-size:.85rem;margin-left:4px}
+  button.danger{background:var(--red-light);color:var(--red)}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  .button-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+
+  /* ---------- Tables ---------- */
+  .scroll{overflow-x:auto}               /* on a phone the table slides sideways */
+  table{border-collapse:collapse;width:100%;min-width:420px}
+  th,td{border:1px solid var(--border);padding:6px 8px;text-align:center}
+  th{background:var(--blue-light)}
+  th.row-head{text-align:left;white-space:nowrap}
+  input{font:inherit;padding:6px 8px;border:2px solid var(--border);border-radius:8px;
+        background:#fff;color:var(--text)}
+  input:focus{outline:none;border-color:var(--blue)}
+  input.name{width:130px;font-weight:600}
+  input.num{width:90px;text-align:center}
+  input.invalid{border-color:var(--red);background:var(--red-light)}
+  td.winner{background:var(--green-light);font-weight:700}
+  td.row-label{text-align:left;font-weight:600}
+  tr.helper td{background:#f7f9fc;color:var(--muted);font-style:italic}
+
+  /* ---------- Probabilities ---------- */
+  .prob-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+  .prob-grid label{display:block;font-weight:600;font-size:.92rem}
+  .prob-grid input{width:100%}
+  .sum-box{margin-top:10px;padding:8px 12px;border-radius:10px;font-weight:600}
+  .sum-box.ok{background:var(--green-light);color:#146b46}
+  .sum-box.bad{background:var(--amber-light);color:#8a5a00}
+
+  /* ---------- Alerts ---------- */
+  .alert{padding:9px 12px;border-radius:10px;margin:6px 0;font-size:.93rem}
+  .alert.error{background:var(--red-light);color:#9b2525}
+  .alert.warn{background:var(--amber-light);color:#8a5a00}
+
+  /* ---------- Criterion cards ---------- */
+  .criteria{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+  .criterion{border:2px solid var(--border);border-radius:var(--radius);padding:12px}
+  .criterion h3{margin:0;color:var(--blue)}
+  .criterion .formula{font-size:.82rem;color:var(--muted);margin:2px 0 8px}
+  .criterion .rec{font-size:1.15rem;font-weight:800}
+  .criterion.tie{border-color:var(--amber);background:var(--amber-light)}
+  .criterion.single{border-color:var(--green);background:var(--green-light)}
+  .criterion.empty{background:#f4f4f4}
+  .badge{display:inline-block;font-size:.75rem;font-weight:700;padding:1px 8px;border-radius:999px;
+         background:var(--amber);color:#fff;margin-left:6px;vertical-align:middle}
+
+  /* ---------- Filtering stages ---------- */
+  .stage{border-left:6px solid var(--blue);background:#f8fafd;border-radius:10px;padding:10px 14px;margin:10px 0}
+  .stage.skipped{border-color:#9aa5b1;opacity:.75}
+  .stage.nochange{border-color:var(--amber)}
+  .stage.eliminates{border-color:var(--green)}
+  .stage h3{margin:0}
+  .chip{display:inline-block;padding:2px 10px;border-radius:999px;font-size:.88rem;font-weight:600;margin:2px 4px 2px 0}
+  .chip.alive{background:var(--green-light);color:#146b46;border:1px solid var(--green)}
+  .chip.out{background:var(--red-light);color:#9b2525;border:1px solid var(--red);text-decoration:line-through}
+  .final-result{margin-top:12px;padding:14px;border-radius:var(--radius);font-size:1.15rem;font-weight:800;text-align:center}
+  .final-result.single{background:var(--green-light);border:2px solid var(--green)}
+  .final-result.tie{background:var(--amber-light);border:2px solid var(--amber)}
+
+  /* ---------- Flow diagram ---------- */
+  .flow{display:flex;flex-wrap:wrap;align-items:stretch;gap:6px}
+  .node{flex:1 1 150px;max-width:210px;border:2px solid var(--blue);background:var(--blue-light);
+        border-radius:var(--radius);padding:10px;text-align:center;font-size:.9rem}
+  .node .title{font-weight:800;margin-bottom:4px}
+  .node.eliminates{border-color:var(--green);background:#f1fbf6}
+  .node.nochange{border-color:var(--amber);background:var(--amber-light)}
+  .node.skipped{border-color:#9aa5b1;background:#eef0f3;color:#5d6b7c}
+  .node.final-single{border-color:var(--green);background:var(--green-light)}
+  .node.final-tie{border-color:var(--amber);background:var(--amber-light)}
+  .arrow{align-self:center;font-weight:800;color:var(--blue);font-size:1.4rem}
+  .arrow::after{content:"→"}
+
+  details{margin-top:8px}
+  summary{cursor:pointer;font-weight:600;color:var(--blue)}
+  footer{text-align:center;color:var(--muted);font-size:.85rem;padding:10px 16px 28px}
+
+  /* ---------- Phone ---------- */
+  @media (max-width:700px){
+    header h1{font-size:1.3rem}
+    .flow{flex-direction:column;align-items:stretch}
+    .node{max-width:none}
+    .arrow{text-align:center}
+    .arrow::after{content:"↓"}      /* on a phone the diagram goes vertically */
+    input.name{width:105px}
+    input.num{width:75px}
+  }
+</style>
+</head>
+
+<body>
+
+<header>
+  <div class="inner">
+    <div>
+      <h1>Decisions Under Uncertainty</h1>
+      <p>Maximax · Maximin · Minimax Regret · EMV (Bayes) — everything updates automatically</p>
+    </div>
+    <!-- ===================================================================
+         REPLACE HERE: change the href value below to the shared link of your
+         conversation with the AI (copy the link and paste it between the quotes).
+         The visible text of the button is "Conversación con IA"; you can change it too.
+         =================================================================== -->
+    <a class="ai-link" href="https://claude.ai/share/0cd95107-ebd7-4b03-8ff5-a1f5796967a0" target="_blank" rel="noopener">Conversación con IA</a>
+  </div>
+</header>
+
+<main>
+
+  <!-- ============ SECTION 1: EXAMPLES ============ -->
+  <section id="examples">
+    <h2>1. Preloaded examples</h2>
+    <p class="note">Pick an example to load its data. You can edit everything afterwards.</p>
+    <div class="button-row" id="exampleButtons"></div>
+    <p class="note" id="exampleDesc" style="margin-top:10px"></p>
+  </section>
+
+  <!-- ============ SECTION 2: INPUT TABLES ============ -->
+  <section id="input">
+    <h2>2. Problem data</h2>
+    <p class="note">Type the payoffs (gains; use negative numbers for losses). You can edit the names directly.</p>
+    <div class="scroll" id="payoffTable"></div>
+    <div class="button-row">
+      <button data-action="add-alt">+ Add alternative</button>
+      <button data-action="add-state" class="secondary">+ Add state of nature</button>
+    </div>
+
+    <h3>Probability of each state (in %)</h3>
+    <div class="prob-grid" id="probGrid"></div>
+    <div id="probSum" class="sum-box"></div>
+  </section>
+
+  <!-- ============ SECTION 3: RESULTS ============ -->
+  <section id="results">
+    <h2>3. Results of the four criteria</h2>
+    <div id="alerts"></div>
+    <div class="criteria" id="cards"></div>
+
+    <h3>Comparison by alternative</h3>
+    <p class="note">Green = best value of each criterion (if there is a tie, all tied alternatives are highlighted).</p>
+    <div class="scroll" id="comparisonTable"></div>
+
+    <h3>Regret table</h3>
+    <p class="note">Regret = (best payoff in that state) − (payoff of the alternative in that state).</p>
+    <div class="scroll" id="regretTable"></div>
+
+    <details>
+      <summary>How is each criterion calculated?</summary>
+      <ul>
+        <li><b>Maximax (optimistic):</b> take the best payoff of each alternative and choose the alternative with the highest one.</li>
+        <li><b>Maximin (pessimistic):</b> take the worst payoff of each alternative and choose the alternative with the highest of those minimums.</li>
+        <li><b>Minimax Regret:</b> build the regret table, take the maximum regret of each alternative and choose the lowest one.</li>
+        <li><b>EMV / Bayes:</b> expected value = sum of (probability × payoff). Choose the highest. It needs valid probabilities that add up to 100%.</li>
+      </ul>
+    </details>
+  </section>
+
+  <!-- ============ SECTION 4: STAGED FILTERING ============ -->
+  <section id="filtering">
+    <h2>4. Staged filtering</h2>
+    <p class="note">We start with all alternatives, and each stage removes those that are not the best among the ones still alive:
+      Dominance → EMV → Minimax Regret → Maximin → Maximax. The values used are the same as in section 3.</p>
+    <div id="stages"></div>
+    <div id="finalFilter"></div>
+  </section>
+
+  <!-- ============ SECTION 5: FLOW DIAGRAM ============ -->
+  <section id="diagram">
+    <h2>5. Flow diagram</h2>
+    <p class="note">Green = alternatives still alive · Red crossed out = eliminated at that stage.</p>
+    <div class="flow" id="flow"></div>
+  </section>
+
+</main>
+
+<footer>Made with plain HTML, CSS and JavaScript · Results are recalculated automatically whenever any data changes</footer>
+
+<script>
+/* =====================================================================
+   PART A: LOGIC (calculations only; it never touches the screen)
+   ===================================================================== */
+// ==== LOGIC ====
+
+const EPS = 1e-9;   // tolerance to compare decimals (avoids errors like 0.1+0.2)
+
+/* Preloaded examples. Payoffs are stored as text because that is what the input boxes hold. */
+const EXAMPLES = [
+  {
+    name: "Investment (no ties)",
+    description: "5 investment alternatives and 3 economic scenarios. Each criterion recommends something different, and 'Mattress' is dominated by 'Bonds' (and by 'Savings account').",
+    alts: ["Stocks","Bonds","Real estate","Savings account","Mattress"],
+    states: [
+      {name:"Booming economy", prob:"30"},
+      {name:"Stable economy", prob:"50"},
+      {name:"Recession", prob:"20"}
+    ],
+    payoffs: [
+      ["80","40","-30"],
+      ["40","30","10"],
+      ["60","35","-10"],
+      ["20","20","20"],
+      ["0","0","0"]
+    ]
+  },
+  {
+    name: "Product launch (with ties)",
+    description: "EMV is tied between A and C, and Maximin is tied between B and D. D is dominated by B. Use it to test tie detection.",
+    alts: ["Product A","Product B","Product C","Product D"],
+    states: [
+      {name:"High demand", prob:"40"},
+      {name:"Medium demand", prob:"40"},
+      {name:"Low demand", prob:"20"}
+    ],
+    payoffs: [
+      ["100","50","0"],
+      ["60","60","30"],
+      ["80","80","-20"],
+      ["50","40","30"]
+    ]
+  },
+  {
+    name: "Suppliers (final tie)",
+    description: "North and South have identical payoffs: they tie on all 4 criteria and the filtering ends in a final tie. 'Center' is dominated.",
+    alts: ["Supplier North","Supplier South","Supplier Center"],
+    states: [
+      {name:"Scenario 1", prob:"30"},
+      {name:"Scenario 2", prob:"40"},
+      {name:"Scenario 3", prob:"30"}
+    ],
+    payoffs: [
+      ["70","50","30"],
+      ["70","50","30"],
+      ["60","40","20"]
+    ]
+  }
+];
+
+/* Converts text to a number. Returns NaN if it is empty or contains letters.
+   Accepts a comma or a dot as the decimal separator ("2,5" = 2.5). */
+function parseNum(txt){
+  if (txt === null || txt === undefined) return NaN;
+  const s = String(txt).trim().replace(",", ".");
+  if (s === "") return NaN;
+  if (!/^[-+]?(\d+(\.\d*)?|\.\d+)$/.test(s)) return NaN;   // rejects letters, 1e3, Infinity...
+  return parseFloat(s);
+}
+
+/* Formats a number for display (max. 4 decimals, no trailing zeros). */
+function fmt(x){
+  if (typeof x !== "number" || isNaN(x)) return "—";
+  return String(Number(x.toFixed(4)));
+}
+
+/* Among the given indices, returns ALL those that have the best value (max or min).
+   This way ties are detected instead of picking one at random. */
+function bestOf(values, indices, mode){
+  let best = null;
+  indices.forEach(i => {
+    const v = values[i];
+    if (best === null || (mode === "max" ? v > best : v < best)) best = v;
+  });
+  const tol = EPS * Math.max(1, Math.abs(best));
+  return indices.filter(i => Math.abs(values[i] - best) <= tol);
+}
+
+/* English list of names: "A", "A and C", "A, B and C". */
+function listNames(names){
+  if (names.length <= 1) return names.join("");
+  return names.slice(0, -1).join(", ") + " and " + names[names.length - 1];
+}
+/* Recommendation text: a single name or "Tie between A and C". */
+function winnersText(names){
+  return names.length > 1 ? "Tie between " + listNames(names) : names[0];
+}
+
+/* ---------- MAIN CALCULATION ----------
+   Receives the data (text from the input boxes) and returns an object "r" with EVERYTHING
+   the screen needs. The whole page uses this same object, which is why it is consistent. */
+function calculate(d){
+  const n = d.alts.length, m = d.states.length;
+  const r = { n, m };
+  r.names      = d.alts.map((a,i)   => a.name.trim() || "Alternative " + (i+1));
+  r.stateNames = d.states.map((s,j) => s.name.trim() || "State " + (j+1));
+
+  // --- validate payoffs ---
+  r.payoffErrors = [];
+  const M = [];
+  for (let i = 0; i < n; i++){
+    const row = [];
+    for (let j = 0; j < m; j++){
+      const raw = d.payoffs[i][j];
+      const v = parseNum(raw);
+      if (isNaN(v)) r.payoffErrors.push({i, j, reason: String(raw).trim() === "" ? "empty" : "not a number"});
+      row.push(v);
+    }
+    M.push(row);
+  }
+  r.payoffsValid = r.payoffErrors.length === 0 && n > 0 && m > 0;
+
+  // --- validate probabilities ---
+  r.probErrors = [];
+  const P = [];
+  let sum = 0;
+  for (let j = 0; j < m; j++){
+    const raw = d.states[j].prob;
+    const v = parseNum(raw);
+    if (isNaN(v)) r.probErrors.push({j, reason: String(raw).trim() === "" ? "is empty" : "is not a number"});
+    else {
+      if (v < 0) r.probErrors.push({j, reason: "is negative"});
+      else if (v > 100) r.probErrors.push({j, reason: "is greater than 100"});
+      sum += v;
+    }
+    P.push(v);
+  }
+  r.probSum = sum;
+  r.sumOk = Math.abs(sum - 100) <= 0.01;
+  r.probsValid = r.probErrors.length === 0 && r.sumOk;
+
+  // --- repeated names (ties would be confusing) ---
+  const seen = {}; r.duplicates = [];
+  r.names.forEach(nm => { const k = nm.toLowerCase(); seen[k] = (seen[k]||0)+1; if (seen[k] === 2) r.duplicates.push(nm); });
+
+  r.maximax = r.maximin = r.regret = r.emv = null;
+  r.filter = null;
+  if (!r.payoffsValid) return r;     // without valid payoffs nothing is calculated
+
+  r.M = M;
+  const idx = [...Array(n).keys()];
+
+  // MAXIMAX: best payoff of each row; the highest wins
+  const rowMax = M.map(f => Math.max(...f));
+  r.maximax = { values: rowMax, winners: bestOf(rowMax, idx, "max") };
+
+  // MAXIMIN: worst payoff of each row; the highest of the minimums wins
+  const rowMin = M.map(f => Math.min(...f));
+  r.maximin = { values: rowMin, winners: bestOf(rowMin, idx, "max") };
+
+  // MINIMAX REGRET: regret table and maximum regret; the lowest wins
+  const colMax = [];
+  for (let j = 0; j < m; j++) colMax.push(Math.max(...M.map(f => f[j])));
+  const table = M.map(f => f.map((v, j) => colMax[j] - v));
+  const maxRegret = table.map(f => Math.max(...f));
+  r.regret = { colMax, table, values: maxRegret, winners: bestOf(maxRegret, idx, "min") };
+
+  // EMV (Bayes): sum of probability × payoff; only if the probabilities are valid
+  if (r.probsValid){
+    const emvV = M.map(f => f.reduce((s, v, j) => s + v * P[j] / 100, 0));
+    r.emv = { values: emvV, winners: bestOf(emvV, idx, "max") };
+  }
+
+  r.filter = runFilter(r);
+  return r;
+}
+
+/* ---------- STAGED FILTERING ----------
+   Each stage starts from the "alive" alternatives and keeps only the best ones for its criterion. */
+function runFilter(r){
+  const idx = [...Array(r.n).keys()];
+  let alive = idx.slice();
+  const stages = [];
+
+  // Stage 1: DOMINANCE. i is dominated if another k pays >= in every state and > in at least one.
+  const dominatedBy = {};
+  idx.forEach(i => {
+    for (const k of idx){
+      if (k === i) continue;
+      let all = true, some = false;
+      for (let j = 0; j < r.m; j++){
+        const a = r.M[k][j], b = r.M[i][j];
+        if (a < b - EPS){ all = false; break; }
+        if (a > b + EPS) some = true;
+      }
+      if (all && some){ dominatedBy[i] = k; break; }
+    }
+  });
+  const kept1 = alive.filter(i => !(i in dominatedBy));
+  const removed1 = alive.filter(i => i in dominatedBy);
+  stages.push({
+    title: "Stage 1 · Dominance",
+    desc: "Removes any alternative that another one matches or beats in every state (and beats in at least one).",
+    status: removed1.length ? "eliminates" : "nochange",
+    before: alive.slice(), kept: kept1, removed: removed1,
+    detail: removed1.length
+      ? removed1.map(i => r.names[i] + " is dominated by " + r.names[dominatedBy[i]]).join("; ") + "."
+      : "No alternative is dominated; nobody is removed."
+  });
+  alive = kept1;
+
+  // Stages 2 to 5: criteria. "vals" are the values already calculated in section 3.
+  function criterionStage(title, desc, vals, mode, valueText){
+    const before = alive.slice();
+    if (vals === null){
+      stages.push({title, desc, status:"skipped", before, kept:before, removed:[],
+        detail:"Stage skipped: valid probabilities are missing (≥ 0 and adding up to 100%)."});
+      return;
+    }
+    if (alive.length === 1){
+      stages.push({title, desc, status:"nochange", before, kept:before, removed:[],
+        detail:"Only one alternative is left; this stage is not needed."});
+      return;
+    }
+    const q = bestOf(vals, alive, mode);
+    const e = alive.filter(i => !q.includes(i));
+    let detail = valueText + ": " + fmt(vals[q[0]]) + ". ";
+    if (e.length === 0) detail += "All alive alternatives have the same value; nobody is removed.";
+    else if (q.length > 1) detail += "There is a tie between " + listNames(q.map(i => r.names[i])) + "; all tied alternatives move on.";
+    else detail += r.names[q[0]] + " moves on.";
+    stages.push({title, desc, status: e.length ? "eliminates" : "nochange", before, kept:q, removed:e, detail});
+    alive = q;
+  }
+  criterionStage("Stage 2 · EMV (Bayes)", "Keeps the alternatives with the highest expected value.",
+    r.emv ? r.emv.values : null, "max", "Highest EMV among the alive alternatives");
+  criterionStage("Stage 3 · Minimax Regret", "Keeps the alternatives with the lowest maximum regret.",
+    r.regret.values, "min", "Lowest maximum regret among the alive alternatives");
+  criterionStage("Stage 4 · Maximin", "Keeps the alternatives with the highest minimum payoff.",
+    r.maximin.values, "max", "Highest minimum payoff among the alive alternatives");
+  criterionStage("Stage 5 · Maximax", "Keeps the alternatives with the highest maximum payoff.",
+    r.maximax.values, "max", "Highest maximum payoff among the alive alternatives");
+
+  return { stages, finals: alive };
+}
+
+// ==== END LOGIC ====
+
+
+/* =====================================================================
+   PART B: INTERFACE (draws tables, results and diagram; handles events)
+   ===================================================================== */
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const clone = o => JSON.parse(JSON.stringify(o));
+
+/* Page state: what the user sees and edits. */
+let data = { alts: [], states: [], payoffs: [] };
+
+/* Loads an example (converts the EXAMPLES format to the "data" format). */
+function loadExample(k){
+  const e = clone(EXAMPLES[k]);
+  data = { alts: e.alts.map(name => ({name})), states: e.states, payoffs: e.payoffs };
+  $("exampleDesc").textContent = e.name + ": " + e.description;
+  renderInput();
+  update();
+}
+
+/* New name that is not repeated (Alternative 3, Alternative 4...). */
+function freeName(list, base){
+  let k = list.length + 1;
+  const used = list.map(x => x.name.trim().toLowerCase());
+  while (used.includes((base + " " + k).toLowerCase())) k++;
+  return base + " " + k;
+}
+
+/* ---------- Draw the input tables ---------- */
+function renderInput(){
+  const n = data.alts.length, m = data.states.length;
+
+  let h = '<table><thead><tr><th>Alternative ↓ / State →</th>';
+  data.states.forEach((s, j) => {
+    h += '<th><input class="name" data-state="' + j + '" value="' + esc(s.name) + '" aria-label="Name of state ' + (j+1) + '">' +
+         '<button class="mini danger" data-action="del-state" data-i="' + j + '" title="Delete state"' + (m === 1 ? " disabled" : "") + '>✕</button></th>';
+  });
+  h += '</tr></thead><tbody>';
+  data.alts.forEach((a, i) => {
+    h += '<tr><th class="row-head"><input class="name" data-alt="' + i + '" value="' + esc(a.name) + '" aria-label="Name of alternative ' + (i+1) + '">' +
+         '<button class="mini danger" data-action="del-alt" data-i="' + i + '" title="Delete alternative"' + (n === 1 ? " disabled" : "") + '>✕</button></th>';
+    for (let j = 0; j < m; j++){
+      h += '<td><input class="num" inputmode="decimal" data-pi="' + i + '" data-pj="' + j + '" value="' + esc(data.payoffs[i][j]) + '" aria-label="Payoff"></td>';
+    }
+    h += '</tr>';
+  });
+  h += '</tbody></table>';
+  $("payoffTable").innerHTML = h;
+  renderProbs();
+}
+
+/* Probability boxes (one per state). */
+function renderProbs(){
+  let h = "";
+  data.states.forEach((s, j) => {
+    h += '<div><label>' + esc(s.name.trim() || "State " + (j+1)) +
+         '<input inputmode="decimal" data-prob="' + j + '" value="' + esc(s.prob) + '" aria-label="Probability in percent"></label></div>';
+  });
+  $("probGrid").innerHTML = h;
+}
+
+/* ---------- Paint the results ---------- */
+function card(title, formula, res, names, missingText){
+  if (!res) return '<div class="criterion empty"><h3>' + title + '</h3><div class="formula">' + formula + '</div><div>' + missingText + '</div></div>';
+  const g = res.winners, tie = g.length > 1;
+  return '<div class="criterion ' + (tie ? "tie" : "single") + '"><h3>' + title +
+    (tie ? '<span class="badge">TIE</span>' : '') + '</h3><div class="formula">' + formula + '</div>' +
+    '<div class="rec">' + esc(winnersText(g.map(i => names[i]))) + '</div>' +
+    '<div>Value: <b>' + fmt(res.values[g[0]]) + '</b></div></div>';
+}
+
+function renderResults(r){
+  // Alerts about invalid data
+  let av = "";
+  if (r.n === 0 || r.m === 0) av += '<div class="alert error">Add at least one alternative and one state.</div>';
+  if (r.payoffErrors.length){
+    av += '<div class="alert error">There are ' + r.payoffErrors.length + ' invalid payoff(s) (marked in red): ' +
+      r.payoffErrors.slice(0, 5).map(e => esc(r.names[e.i]) + " / " + esc(r.stateNames[e.j]) + " (" + e.reason + ")").join(", ") +
+      (r.payoffErrors.length > 5 ? "…" : "") + '. Fix them to see the results.</div>';
+  }
+  r.probErrors.forEach(e => {
+    av += '<div class="alert error">The probability of «' + esc(r.stateNames[e.j]) + '» ' + e.reason + '.</div>';
+  });
+  if (!r.sumOk) av += '<div class="alert warn">The probabilities add up to ' + fmt(r.probSum) + '% but must add up to 100%. EMV is not calculated until they do.</div>';
+  if (r.duplicates.length) av += '<div class="alert warn">Some names are repeated (' + esc(r.duplicates.join(", ")) + '): ties may be confusing. Please rename them.</div>';
+  $("alerts").innerHTML = av;
+
+  if (!r.payoffsValid){
+    const msg = "Fix the payoffs to see this result.";
+    $("cards").innerHTML = "";
+    $("comparisonTable").innerHTML = '<div class="alert warn">' + msg + '</div>';
+    $("regretTable").innerHTML = '<div class="alert warn">' + msg + '</div>';
+    return;
+  }
+
+  const noEMV = "Cannot be calculated: probabilities must be valid (≥ 0) and add up to 100%.";
+  $("cards").innerHTML =
+    card("Maximax", "Optimistic: highest of the maximums", r.maximax, r.names, "") +
+    card("Maximin", "Pessimistic: highest of the minimums", r.maximin, r.names, "") +
+    card("Minimax Regret", "Lowest maximum regret", r.regret, r.names, "") +
+    card("EMV / Bayes", "Highest expected value", r.emv, r.names, noEMV);
+
+  // Comparison table (value of each criterion per alternative)
+  const cols = [["Maximax", r.maximax], ["Maximin", r.maximin], ["Max. regret", r.regret], ["EMV", r.emv]];
+  let h = '<table><thead><tr><th>Alternative</th>' + cols.map(c => '<th>' + c[0] + '</th>').join("") + '</tr></thead><tbody>';
+  for (let i = 0; i < r.n; i++){
+    h += '<tr><td class="row-label">' + esc(r.names[i]) + '</td>';
+    cols.forEach(c => {
+      if (!c[1]) h += '<td>—</td>';
+      else h += '<td class="' + (c[1].winners.includes(i) ? "winner" : "") + '">' + fmt(c[1].values[i]) + '</td>';
+    });
+    h += '</tr>';
+  }
+  $("comparisonTable").innerHTML = h + '</tbody></table>';
+
+  // Regret table
+  let t = '<table><thead><tr><th>Alternative</th>' + r.stateNames.map(s => '<th>' + esc(s) + '</th>').join("") + '<th>Maximum</th></tr></thead><tbody>';
+  for (let i = 0; i < r.n; i++){
+    t += '<tr><td class="row-label">' + esc(r.names[i]) + '</td>' + r.regret.table[i].map(v => '<td>' + fmt(v) + '</td>').join("") +
+         '<td class="' + (r.regret.winners.includes(i) ? "winner" : "") + '"><b>' + fmt(r.regret.values[i]) + '</b></td></tr>';
+  }
+  t += '<tr class="helper"><td class="row-label">Best payoff of the state</td>' + r.regret.colMax.map(v => '<td>' + fmt(v) + '</td>').join("") + '<td></td></tr>';
+  $("regretTable").innerHTML = t + '</tbody></table>';
+}
+
+/* Labels (chips) for alive or eliminated alternatives. */
+function chips(list, cls, r){
+  return list.length ? list.map(i => '<span class="chip ' + cls + '">' + esc(r.names[i]) + '</span>').join("") : '<span class="note">—</span>';
+}
+
+function renderFilter(r){
+  if (!r.filter){
+    const m = '<div class="alert warn">Fix the data in section 2 to see the filtering.</div>';
+    $("stages").innerHTML = m; $("finalFilter").innerHTML = ""; $("flow").innerHTML = m;
+    return;
+  }
+  const label = { eliminates:"Eliminates alternatives", nochange:"No change", skipped:"Skipped" };
+
+  // Section 4: stage cards
+  let h = "";
+  r.filter.stages.forEach(e => {
+    h += '<div class="stage ' + e.status + '"><h3>' + e.title + ' <small>— ' + label[e.status] + '</small></h3>' +
+         '<div class="note">' + e.desc + '</div>' +
+         '<div>Remaining: ' + chips(e.kept, "alive", r) + '</div>' +
+         '<div>Eliminated: ' + chips(e.removed, "out", r) + '</div>' +
+         '<div class="note" style="margin-top:4px">' + esc(e.detail) + '</div></div>';
+  });
+  $("stages").innerHTML = h;
+
+  const fin = r.filter.finals, isTie = fin.length > 1;
+  const finalText = isTie
+    ? "Final tie between " + listNames(fin.map(i => r.names[i])) + " (they are equivalent under all the criteria applied)"
+    : "Final alternative: " + r.names[fin[0]];
+  $("finalFilter").innerHTML = '<div class="final-result ' + (isTie ? "tie" : "single") + '">' + esc(finalText) + '</div>';
+
+  // Section 5: flow diagram (same data as above)
+  const arrow = '<div class="arrow"></div>';
+  let f = '<div class="node"><div class="title">Start</div>' + r.n + ' alternative(s)<div>' +
+          chips([...Array(r.n).keys()], "alive", r) + '</div></div>';
+  r.filter.stages.forEach(e => {
+    f += arrow + '<div class="node ' + e.status + '"><div class="title">' + e.title.replace("Stage ", "S") + '</div>' +
+         '<div>' + label[e.status] + '</div>' +
+         '<div>' + chips(e.kept, "alive", r) + '</div>' +
+         (e.removed.length ? '<div>' + chips(e.removed, "out", r) + '</div>' : '') + '</div>';
+  });
+  f += arrow + '<div class="node ' + (isTie ? "final-tie" : "final-single") + '"><div class="title">Final result</div>' +
+       '<div><b>' + esc(isTie ? "Tie between " + listNames(fin.map(i => r.names[i])) : r.names[fin[0]]) + '</b></div></div>';
+  $("flow").innerHTML = f;
+}
+
+/* Marks boxes with invalid data in red and updates the probability sum. */
+function markInvalid(r){
+  document.querySelectorAll("input[data-pi]").forEach(inp => {
+    inp.classList.toggle("invalid", isNaN(parseNum(inp.value)));
+  });
+  const bad = new Set(r.probErrors.map(e => e.j));
+  document.querySelectorAll("input[data-prob]").forEach(inp => {
+    inp.classList.toggle("invalid", bad.has(+inp.dataset.prob));
+  });
+  const box = $("probSum");
+  box.className = "sum-box " + (r.sumOk && !r.probErrors.length ? "ok" : "bad");
+  box.textContent = "Sum of probabilities: " + fmt(r.probSum) + "% " +
+    (r.sumOk && !r.probErrors.length ? "✔ correct" : "⚠ must be exactly 100% with no negative or empty values");
+}
+
+/* Called EVERY TIME any data changes: recalculates and redraws everything (there is no "calculate" button). */
+function update(){
+  const r = calculate(data);
+  markInvalid(r);
+  renderResults(r);
+  renderFilter(r);
+}
+
+/* ---------- Events ---------- */
+// When the user types in any box
+document.addEventListener("input", e => {
+  const t = e.target, d = t.dataset;
+  if (d.alt !== undefined) data.alts[+d.alt].name = t.value;
+  else if (d.state !== undefined){ data.states[+d.state].name = t.value; renderProbs(); }
+  else if (d.prob !== undefined) data.states[+d.prob].prob = t.value;
+  else if (d.pi !== undefined) data.payoffs[+d.pi][+d.pj] = t.value;
+  else return;
+  update();
+});
+
+// When the user clicks a button (add, delete, examples)
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-action]");
+  if (!b) return;
+  const a = b.dataset.action, i = +b.dataset.i;
+  if (a === "add-alt"){
+    data.alts.push({name: freeName(data.alts, "Alternative")});
+    data.payoffs.push(data.states.map(() => "0"));
+  } else if (a === "add-state"){
+    data.states.push({name: freeName(data.states, "State"), prob: "0"});
+    data.payoffs.forEach(f => f.push("0"));
+  } else if (a === "del-alt" && data.alts.length > 1){
+    data.alts.splice(i, 1); data.payoffs.splice(i, 1);
+  } else if (a === "del-state" && data.states.length > 1){
+    data.states.splice(i, 1); data.payoffs.forEach(f => f.splice(i, 1));
+  } else if (a === "example"){
+    loadExample(i); return;
+  } else return;
+  renderInput();
+  update();
+});
+
+/* ---------- Start: example buttons and first example ---------- */
+$("exampleButtons").innerHTML = EXAMPLES.map((e, k) =>
+  '<button class="secondary" data-action="example" data-i="' + k + '">' + esc(e.name) + '</button>').join("");
+loadExample(0);
+</script>
+</body>
+</html>
